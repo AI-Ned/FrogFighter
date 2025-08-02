@@ -1,0 +1,142 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Frog Fighter</title>
+  <style>
+    body { margin: 0; background: #a3d977; font-family: sans-serif; }
+    canvas { display: block; margin: 10px auto; background: #d0f0c0; }
+    input, button { font-size: 16px; }
+  </style>
+</head>
+<body>
+<div style="text-align: center; margin-top: 10px;">
+  <input id="ipInput" placeholder="ws://localhost:8080" value="ws://localhost:8080" style="padding: 6px; width: 300px;" />
+  <button id="connectBtn" style="padding: 6px 12px;">Connect</button>
+</div>
+<canvas id="game" width="800" height="600"></canvas>
+
+<script>
+let socket, players = {}, myId = null;
+let x = 100 + Math.random() * 400, y = 100 + Math.random() * 400;
+let keys = {};
+const speed = 2.5;
+let gameLoopRunning = false;
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+let tongueStartTime = 0;
+const tongueSpeed = 0.08; // animation progress speed
+let tongueTarget = null;
+let tongueProgress = 0;
+
+document.addEventListener("keydown", e => {
+  keys[e.key.toLowerCase()] = true;
+});
+document.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
+
+canvas.addEventListener("click", (e) => {
+  const rect = canvas.getBoundingClientRect();
+  tongueTarget = {
+    x: e.clientX - rect.left,
+    y: e.clientY - rect.top
+  };
+  tongueStartTime = Date.now();
+  tongueProgress = 0;
+  socket?.send(JSON.stringify({ type: 'attack', x: tongueTarget.x, y: tongueTarget.y }));
+});
+
+document.getElementById("connectBtn").addEventListener("click", connect);
+document.getElementById("ipInput").addEventListener("keydown", e => {
+  if (e.key === "Enter") connect();
+});
+
+function connect() {
+  const ip = document.getElementById("ipInput").value;
+  socket = new WebSocket(ip);
+
+  socket.onopen = () => {
+    console.log("Connected to", ip);
+    requestAnimationFrame(gameLoop);
+  };
+
+  socket.onclose = () => alert("Disconnected from server");
+
+  socket.onmessage = e => {
+    const data = JSON.parse(e.data);
+    if (data.type === 'state') {
+      players = {};
+      data.players.forEach(p => players[p.id] = p);
+      if (!myId && data.players.length) {
+        myId = data.players.find(p => Math.abs(p.x - x) < 5 && Math.abs(p.y - y) < 5)?.id;
+      }
+    }
+  };
+}
+
+function drawPlayer(p) {
+  ctx.fillStyle = p.color;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, 20, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Eyes
+  const eyeOffsetX = 8;
+  const eyeOffsetY = -12;
+  for (let side of [-1, 1]) {
+    ctx.beginPath();
+    ctx.fillStyle = "white";
+    ctx.arc(p.x + side * eyeOffsetX, p.y + eyeOffsetY, 5, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.fillStyle = "black";
+    ctx.arc(p.x + side * eyeOffsetX, p.y + eyeOffsetY, 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.fillStyle = "red";
+  ctx.fillRect(p.x - 20, p.y - 30, Math.max(0, p.hp) / 2, 5);
+}
+
+function gameLoop() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (keys['w'] || keys['arrowup']) y -= speed;
+  if (keys['s'] || keys['arrowdown']) y += speed;
+  if (keys['a'] || keys['arrowleft']) x -= speed;
+  if (keys['d'] || keys['arrowright']) x += speed;
+
+  x = Math.max(20, Math.min(canvas.width - 20, x));
+  y = Math.max(20, Math.min(canvas.height - 20, y));
+
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({ type: 'move', x, y }));
+  }
+
+  for (const id in players) { if (players[id].hp > 0) drawPlayer(players[id]); }
+
+  // Animate tongue toward click
+  if (tongueTarget && tongueProgress < 1) {
+    tongueProgress += tongueSpeed;
+    const tx = x + (tongueTarget.x - x) * tongueProgress;
+    const ty = y + (tongueTarget.y - y) * tongueProgress;
+
+    ctx.strokeStyle = "pink";
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(tx, ty);
+    ctx.stroke();
+
+    if (tongueProgress >= 1) {
+      tongueTarget = null;
+    }
+  }
+
+  requestAnimationFrame(gameLoop);
+}
+</script>
+</body>
+</html>
