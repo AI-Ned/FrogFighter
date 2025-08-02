@@ -33,7 +33,7 @@ let myId = null;
 let posX = 100 + Math.random() * 400;
 let posY = 100 + Math.random() * 400;
 const keys = {};
-const speed = 2.5;
+const speed = 2.1;
 let gameLoopRunning = false;
 
 const canvas = document.getElementById("game");
@@ -42,7 +42,7 @@ const ctx = canvas.getContext("2d");
 // Tongue attack
 let tongueTarget = null;
 let tongueProgress = 0;
-const tongueSpeed = 0.25;
+const tongueSpeed = 0.05;
 
 // Key handling
 document.addEventListener("keydown", e => {
